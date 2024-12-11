@@ -27,6 +27,8 @@ const logPath = "efw2.log"
 
 var logFile *os.File
 
+var validateAlphaNumeric bool
+
 func main() {
 	var err error
 	logFile, err = os.OpenFile(logPath, os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
@@ -39,12 +41,25 @@ func main() {
 		log.Fatal("Too few arguments. Provide two files to compare")
 	}
 
-	file1, err := os.ReadFile(args[0])
+	var files []string
+	if len(args) > 2 {
+		for _, arg := range args {
+			if arg == "-a" {
+				validateAlphaNumeric = true
+			} else {
+				files = append(files, arg)
+			}
+		}
+	} else {
+		files = args
+	}
+
+	file1, err := os.ReadFile(files[0])
 	if err != nil {
 		log.Fatal("Error opening file 1:", err)
 	}
 
-	file2, err := os.ReadFile(args[1])
+	file2, err := os.ReadFile(files[1])
 	if err != nil {
 		log.Fatal("Error opening file 2:", err)
 	}
@@ -109,33 +124,39 @@ func compare(file1Records, file2Records []string) {
 
 func compareRE(record1, record2 string) []recordError {
 	var errors []recordError
-	errors = checkSection("Employer Info", record1[:96], record2[:96], 0, errors)
-	locationErrors := checkSection("Employer Address", record1[96:118], record2[96:118], 96, errors)
-	if len(locationErrors) != 0 {
-		errors = checkSection("Employer Address", record1[96:118], record2[118:140], 96, errors)
+	errors = checkSection("Record Key", record1[:39], record2[:39], 0, errors)
+	if validateAlphaNumeric {
+		errors = checkSection("Employer Name", record1[39:96], record2[39:96], 0, errors)
+		locationErrors := checkSection("Employer Address", record1[96:118], record2[96:118], 96, errors)
+		if len(locationErrors) != 0 {
+			errors = checkSection("Employer Address", record1[96:118], record2[118:140], 96, errors)
+		}
+		deliveryErrors := checkSection("Employer Address", record1[118:140], record2[118:140], 118, errors)
+		if len(deliveryErrors) != 0 {
+			errors = checkSection("Employer Address", record1[118:140], record2[96:118], 118, errors)
+		}
+		errors = checkSection("Employer Address", record1[140:173], record2[140:173], 140, errors)
+		errors = checkSection("Employer Info", record1[173:], record2[173:], 173, errors)
 	}
-	deliveryErrors := checkSection("Employer Address", record1[118:140], record2[118:140], 118, errors)
-	if len(deliveryErrors) != 0 {
-		errors = checkSection("Employer Address", record1[118:140], record2[96:118], 118, errors)
-	}
-	errors = checkSection("Employer Address", record1[140:173], record2[140:173], 140, errors)
-	errors = checkSection("Employer Info", record1[173:], record2[173:], 173, errors)
 	return errors
 }
 
 func compareRW(record1, record2 string) []recordError {
 	var errors []recordError
-	errors = checkSection("Employee Info", record1[:65], record2[:65], 0, errors)
-	locationErrors := checkSection("Employee Address", record1[65:87], record2[65:87], 65, []recordError{})
-	if len(locationErrors) != 0 {
-		errors = checkSection("Employee Address", record1[65:87], record2[87:109], 65, errors)
+	errors = checkSection("Record Key", record1[:12], record2[:12], 0, errors)
+	if validateAlphaNumeric {
+		errors = checkSection("Employee Info", record1[12:65], record2[12:65], 0, errors)
+		locationErrors := checkSection("Employee Address", record1[65:87], record2[65:87], 65, []recordError{})
+		if len(locationErrors) != 0 {
+			errors = checkSection("Employee Address", record1[65:87], record2[87:109], 65, errors)
+		}
+		deliveryErrors := checkSection("Employee Address", record1[87:109], record2[87:109], 87, []recordError{})
+		if len(deliveryErrors) != 0 {
+			errors = checkSection("Employee Address", record1[87:109], record2[65:87], 87, errors)
+		}
+		errors = checkSection("Employee Address", record1[109:138], record2[109:138], 109, errors)
+		errors = checkSection("Employee Info", record1[142:187], record2[142:187], 142, errors)
 	}
-	deliveryErrors := checkSection("Employee Address", record1[87:109], record2[87:109], 87, []recordError{})
-	if len(deliveryErrors) != 0 {
-		errors = checkSection("Employee Address", record1[87:109], record2[65:87], 87, errors)
-	}
-	errors = checkSection("Employee Address", record1[109:138], record2[109:138], 109, errors)
-	errors = checkSection("Employee Info", record1[142:187], record2[142:187], 142, errors)
 	errors = checkSection("Employee Amounts", record1[187:264], record2[187:264], 187, errors)
 	errors = checkSection("Employee Amounts", record1[275:341], record2[275:341], 275, errors)
 	errors = checkSection("Employee Amounts", record1[353:396], record2[353:396], 353, errors)
